@@ -317,7 +317,7 @@ public final class Config {
     }
 
     private AppName timeseriesName(AppName app, EventType eventType, Format format) {
-        if (format == Format.JFR)
+        if (Format.JFR == format || Format.PPROF == format)
             return app;
         return app.newBuilder()
             .setName(app.name + "." + eventType.id)
