@@ -6,7 +6,10 @@ import io.pyroscope.labels.Pyroscope;
 import io.pyroscope.labels.io.pyroscope.PyroscopeAsyncProfiler;
 import one.profiler.AsyncProfiler;
 import one.profiler.Counter;
+import one.jfr.JfrReader;
+import io.pyroscope.javaagent.pprof.jfr2pprof;
 
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -22,12 +25,26 @@ public final class Profiler {
     private String lock;
     private Duration interval;
     private Format format;
-    private File tempJFRFile;
+    private File tempJFRFile = null;
 
     private final AsyncProfiler instance = PyroscopeAsyncProfiler.getAsyncProfiler();
 
-    Profiler(Config config) {
+    Profiler(final Config config) {
         setConfig(config);
+
+        if (asyncProfilerJfr()) {
+            try {
+                // flight recorder is built on top of a file descriptor, so we need a file.
+                tempJFRFile = File.createTempFile("pyroscope", ".jfr");
+                tempJFRFile.deleteOnExit();
+            } catch (IOException e) {
+                throw new IllegalStateException(e);
+            }
+        }
+    }
+
+    private boolean asyncProfilerJfr() {
+        return Format.JFR == format || Format.PPROF == format;
     }
 
     public void setConfig(final Config config) {
@@ -37,25 +54,13 @@ public final class Profiler {
         this.eventType = config.profilingEvent;
         this.interval = config.profilingInterval;
         this.format = config.format;
-
-        if (format == Format.JFR) {
-            try {
-                // flight recorder is built on top of a file descriptor, so we need a file.
-                tempJFRFile = File.createTempFile("pyroscope", ".jfr");
-                tempJFRFile.deleteOnExit();
-            } catch (IOException e) {
-                throw new IllegalStateException(e);
-            }
-        } else {
-            tempJFRFile = null;
-        }
     }
 
     /**
      * Start async-profiler
      */
     public synchronized void start() {
-        if (format == Format.JFR) {
+        if (asyncProfilerJfr()) {
             try {
                 instance.execute(createJFRCommand());
             } catch (IOException e) {
@@ -82,8 +87,6 @@ public final class Profiler {
     public synchronized Snapshot dumpProfile(Instant started, Instant ended) {
         return dumpImpl(started, ended);
     }
-
-
 
     private String createJFRCommand() {
         StringBuilder sb = new StringBuilder();
@@ -114,8 +117,10 @@ public final class Profiler {
             System.gc();
         }
         final byte[] data;
-        if (format == Format.JFR) {
+        if (Format.JFR == format) {
             data = dumpJFR();
+        } else if (Format.PPROF == format) {
+            data = dumpPprof();
         } else {
             data = instance.dumpCollapsed(Counter.SAMPLES).getBytes(StandardCharsets.UTF_8);
         }
@@ -129,6 +134,16 @@ public final class Profiler {
         );
     }
 
+    private byte[] dumpPprof() {
+        try (final JfrReader jfrReader = new JfrReader(tempJFRFile.getAbsolutePath());
+                final ByteArrayOutputStream out = new ByteArrayOutputStream();) {
+            jfr2pprof.Convert(jfrReader, out, eventType.id);
+            return out.toByteArray();
+        } catch (final Throwable e) {
+            throw new IllegalStateException(e);
+        }
+    }
+    
     private byte[] dumpJFR() {
         try {
             byte[] bytes = new byte[(int) tempJFRFile.length()];

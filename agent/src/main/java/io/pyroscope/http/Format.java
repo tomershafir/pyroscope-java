@@ -3,7 +3,8 @@ package io.pyroscope.http;
 public enum Format {
     @Deprecated // use jfr
     COLLAPSED ("collapsed"),
-    JFR ("jfr");
+    JFR ("jfr"),
+    PPROF("pprof");
 
     /**
      * Profile data format, as expected by Pyroscope's HTTP API.

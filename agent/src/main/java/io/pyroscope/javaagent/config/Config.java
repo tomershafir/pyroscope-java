@@ -476,6 +476,8 @@ public final class Config {
                 return Format.COLLAPSED;
             case "jfr":
                 return Format.JFR;
+            case "pprof":
+                return Format.PPROF;
             default:
                 DefaultLogger.PRECONFIG_LOGGER.log(Logger.Level.WARN, "Unknown format %s, using %s", format, DEFAULT_FORMAT);
                 return DEFAULT_FORMAT;

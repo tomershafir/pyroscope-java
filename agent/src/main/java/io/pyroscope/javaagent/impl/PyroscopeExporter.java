@@ -51,7 +51,7 @@ public class PyroscopeExporter implements Exporter {
         while (retry) {
             tries++;
             final RequestBody requestBody;
-            if (config.format == Format.JFR) {
+            if (Format.JFR == config.format) {
                 byte[] labels = snapshot.labels.toByteArray();
                 logger.log(Logger.Level.DEBUG, "Upload attempt %d to %s. %s %s JFR: %s, labels: %s", tries, url.toString(),
                     snapshot.started.toString(), snapshot.ended.toString(), snapshot.data.length, labels.length);
@@ -70,6 +70,11 @@ public class PyroscopeExporter implements Exporter {
                     bodyBuilder.addFormDataPart("labels", "labels", labelsBody);
                 }
                 requestBody = bodyBuilder.build();
+            } else if (Format.PPROF == config.format) {
+                // TODO: send dynamic context as part of multipart or parse into pprof
+                logger.log(Logger.Level.DEBUG, "Upload attempt %d to %s. %s %s pprof: %s", tries, url.toString(),
+                    snapshot.started.toString(), snapshot.ended.toString(), snapshot.data.length);
+                requestBody = RequestBody.create(snapshot.data);
             } else {
                 logger.log(Logger.Level.DEBUG, "Upload attempt %d to %s. collapsed: %s", tries, url.toString(), snapshot.data.length);
                 requestBody = RequestBody.create(snapshot.data);
@@ -77,11 +82,8 @@ public class PyroscopeExporter implements Exporter {
             Request.Builder request = new Request.Builder()
                 .post(requestBody)
                 .url(url);
-
             config.httpHeaders.forEach((k, v) -> request.header(k, v));
-
             addAuthHeader(request, url, config);
-
 
             try (Response response = client.newCall(request.build()).execute()) {
                 int status = response.code();
