@@ -198,6 +198,7 @@ public class JfrReader implements Closeable {
         int tid = getVarint();
         int stackTraceId = getVarint();
         int threadState = getVarint();
+        getVarlong(); // contextId
         return new ExecutionSample(time, tid, stackTraceId, threadState);
     }
 
@@ -208,6 +209,7 @@ public class JfrReader implements Closeable {
         int classId = getVarint();
         long allocationSize = getVarlong();
         long tlabSize = tlab ? getVarlong() : 0;
+        getVarlong(); // contextId
         return new AllocationSample(time, tid, stackTraceId, classId, allocationSize, tlabSize);
     }
 
@@ -230,6 +232,7 @@ public class JfrReader implements Closeable {
         if (hasTimeout) getVarlong();
         long until = getVarlong();
         long address = getVarlong();
+        getVarlong(); // contextId
         return new ContendedLock(time, tid, stackTraceId, duration, classId);
     }
 
